@@ -1,33 +1,63 @@
 #Ratan Mohapatra.
 #Please be careful in running it. You will have to use the folder structure or change it as per your environment.
-#1. Prerequisites:
-function pre-req{
-    Install-WindowsFeature AS-HTTP-Activation, Desktop-Experience, NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, `
-    RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, Web-Mgmt-Console, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, `
-    Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, `
-    Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, `
-    Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS, server-media-foundation
-    }
+# April 2019
+#Windows Server 2012 and Windows Server 2012 R2 prerequisites for Exchange 2016
+#https://docs.microsoft.com/en-us/exchange/plan-and-deploy/prerequisites?view=exchserver-2016#windows-server-2012-and-windows-server-2012-r2-prerequisites-for-exchange-2016
 
-pre-req
-Restart-Computer
+#1. Prequisites
+function doPrequisites{
+Install-WindowsFeature AS-HTTP-Activation, Server-Media-Foundation, NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, `
+RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, `
+Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, `
+Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS
+restart-computer
+}
 
-#2. UCMA
-cd  ‘c:\myshare\ExchageInstall’
-.\UcmaRuntimeSetup.exe 
+doPrequisites
 
+#Add to Domain
+$dom = 'mars.local'
+$adminUser = 'ratan_adm'
+$adminUser = $dom.Split('.')[0] + '\' + $adminUser
 
-#Exchange Server
+$cred = Get-Credential -UserName $adminUser -Message "Provide your Admin- Ent, Schmea - PW"
+Add-Computer -DomainName $dom -Credential $cred -Restart
+
+#3. Install the VS packages and UCMA
+cd C:\Users\Administrator\Downloads\Exchange2016_Pre
+ls
+.\vcredist_x64_VisStudio2012.exe
+.\vcredist_x64_VisStudio2013.exe
+.\UcmaRuntimeSetup.exe
+
+#3. Extend Schema
+$dom = $env:USERDNSDOMAIN
+
+$adminUser = 'ratan_adm'
+$adminUser = $dom.Split('.')[0] + '\' + $adminUser
+
+$dvdDrive = Get-CimInstance Win32_LogicalDisk | ?{ $_.DriveType -eq 5} | select DeviceID
+cd $dvdDrive.DeviceID
+
 $lic = 'IAcceptExchangeServerLicenseTerms'
-$org = 'Pluto'
-cd d:
 
-# Prepare Schema
-    .\Setup.EXE /PrepareSchema /$lic
-    Restart-Computer
+.\Setup.EXE /$lic /PrepareSchema
 
-#prepare AD
-.\Setup.EXE /PrepareAD /OrganizationName:$org /$lic
+#4. Prepare AD
+$org = 'Mars'
+$dvdDrive = Get-CimInstance Win32_LogicalDisk | ?{ $_.DriveType -eq 5} | select DeviceID
+cd $dvdDrive.DeviceID
 
-#Install Exchange (no need to restart)
-.\Setup.EXE /Mode:Install /Role:Mailbox /$lic
+$lic = 'IAcceptExchangeServerLicenseTerms'
+
+.\Setup.EXE /$lic /PrepareAD /OrganizationName:$org
+
+Enter-PSSession -ComputerName sf-dc1  #restart-computer -force
+
+#5. Install Exchange Server
+
+$dvdDrive = Get-CimInstance Win32_LogicalDisk | ?{ $_.DriveType -eq 5} | select DeviceID
+cd $dvdDrive.DeviceID
+
+.\Setup.EXE /$lic /Mode:Install /Role:Mailbox
+restart-computer -force
